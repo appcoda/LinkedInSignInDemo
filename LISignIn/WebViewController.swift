@@ -16,7 +16,12 @@ class WebViewController: UIViewController, UIWebViewDelegate {
     
     
     // MARK: Constants
-    
+    let host = "com.appcoda.linkedin.oauth"
+
+    let authRedirectAddress = "https://com.appcoda.linkedin.oauth/oauth"
+
+    let accessTokenRequestRedirectAddress = "https://com.appcoda.linkedin.oauth/oauth"
+
     let linkedInKey = "CLIENT_ID"
     
     let linkedInSecret = "CLIENT_SECRET"
@@ -68,7 +73,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         let responseType = "code"
         
         // Set the redirect URL. Adding the percent escape characthers is necessary.
-        let redirectURL = "https://com.appcoda.linkedin.oauth/oauth".addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        let redirectURL = authRedirectAddress.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         
         // Create a random string based on the time intervale (it will be in the form linkedin12345679).
         let state = "linkedin\(Int(NSDate().timeIntervalSince1970))"
@@ -97,7 +102,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
     func requestForAccessToken(authorizationCode: String) {
         let grantType = "authorization_code"
         
-        let redirectURL = "https://com.appcoda.linkedin.oauth/oauth".addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        let redirectURL = accessTokenRequestRedirectAddress.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         
         // Set the POST parameters.
         var postParams = "grant_type=\(grantType)&"
@@ -128,26 +133,35 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         
         // Make the request.
         let task: URLSessionDataTask = session.dataTask(with: request as URLRequest) { (data, response, error) -> Void in
-            // Get the HTTP status code of the request.
-            let statusCode = (response as! HTTPURLResponse).statusCode
-            
-            if statusCode == 200 {
-                // Convert the received JSON data into a dictionary.
-                do {
-                    let dataDictionary = try JSONSerialization.jsonObject(with: data!, options: JSONSerialization.ReadingOptions.mutableContainers) as! [String: String]
-
-                    let accessToken = dataDictionary["access_token"]
-                    
-                    UserDefaults.standard.set(accessToken, forKey: "LIAccessToken")
-                    UserDefaults.standard.synchronize()
-
-                    DispatchQueue.main.async {
-                        self.dismiss(animated: true, completion: nil)
-                    }
+            if let error = error {
+                print("Received error: \(error)")
+                return
+            }
+            guard let data = data else {
+                print("Returned data is nil")
+                return
+            }
+            // Convert the received JSON data into a dictionary.
+            do {
+                let dataJson = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
+                guard let dataDictionary = dataJson as? [String: Any] else {
+                    print("Failed to create [String: Any] from \(dataJson)")
+                    return
                 }
-                catch {
-                    print("Could not convert JSON data into a dictionary.")
+                guard let accessToken = dataDictionary["access_token"] as? String else {
+                    print("Failed to get access_token from \(dataDictionary)")
+                    return
                 }
+
+                UserDefaults.standard.set(accessToken, forKey: "LIAccessToken")
+                UserDefaults.standard.synchronize()
+
+                DispatchQueue.main.async {
+                    self.dismiss(animated: true, completion: nil)
+                }
+            }
+            catch {
+                print("Could not convert JSON data into a dictionary.")
             }
         }
         
@@ -161,7 +175,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         let url = request.url!
         print(url)
         
-        if url.host == "com.appcoda.linkedin.oauth" {
+        if url.host == host {
             if url.absoluteString.range(of: "code") != nil {
                 // Extract the authorization code.
                 let urlParts = url.absoluteString.components(separatedBy: "?")
