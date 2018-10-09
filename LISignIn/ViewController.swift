@@ -92,8 +92,11 @@ class ViewController: UIViewController {
     
     
     @IBAction func openProfileInSafari(sender: AnyObject) {
-        let profileURL = NSURL(string: btnOpenProfile.title(for: .normal)!)
-        UIApplication.shared.openURL(profileURL! as URL)
+        guard
+            let profileAddress = btnOpenProfile.title(for: .normal),
+            let profileURL = URL(string: profileAddress)
+        else { return }
+        UIApplication.shared.openURL(profileURL)
     }
  
     
