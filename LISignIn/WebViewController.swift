@@ -161,7 +161,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
                 }
             }
             catch {
-                print("Could not convert JSON data into a dictionary.")
+                print("Could not convert JSON data using JSONSerialization")
             }
         }
         

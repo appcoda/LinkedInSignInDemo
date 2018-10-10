@@ -65,24 +65,34 @@ class ViewController: UIViewController {
             
             // Make the request.
             let task: URLSessionDataTask = session.dataTask(with: request as URLRequest) { (data, response, error) -> Void in
-                // Get the HTTP status code of the request.
-                let statusCode = (response as! HTTPURLResponse).statusCode
-                
-                if statusCode == 200 {
-                    // Convert the received JSON data into a dictionary.
-                    do {
-                        let dataDictionary = try JSONSerialization.jsonObject(with: data!, options: JSONSerialization.ReadingOptions.mutableContainers) as! [String: String]
-                        
-                        let profileURLString = dataDictionary["publicProfileUrl"]
-                        
-                        DispatchQueue.main.async {
-                            self.btnOpenProfile.setTitle(profileURLString, for: .normal)
-                            self.btnOpenProfile.isHidden = false
-                        }
+                if let error = error {
+                    print("Received error: \(error)")
+                    return
+                }
+                guard let data = data else {
+                    print("Returned data is nil")
+                    return
+                }
+                // Convert the received JSON data into a dictionary.
+                do {
+                    let dataJson = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
+                    guard let dataDictionary = dataJson as? [String: Any] else {
+                        print("Failed to create [String: Any] from \(dataJson)")
+                        return
                     }
-                    catch {
-                        print("Could not convert JSON data into a dictionary.")
+
+                    guard let profileURLString = dataDictionary["publicProfileUrl"] as? String else {
+                        print("Failed to get access_token from \(dataDictionary)")
+                        return
                     }
+
+                    DispatchQueue.main.async {
+                        self.btnOpenProfile.setTitle(profileURLString, for: .normal)
+                        self.btnOpenProfile.isHidden = false
+                    }
+                }
+                catch {
+                    print("Could not convert JSON data using JSONSerialization")
                 }
             }
             
