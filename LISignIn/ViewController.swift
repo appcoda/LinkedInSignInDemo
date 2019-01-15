@@ -23,13 +23,13 @@ class ViewController: UIViewController {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
         
-        btnSignIn.enabled = true
-        btnGetProfileInfo.enabled = false
-        btnOpenProfile.hidden = true
+        btnSignIn.isEnabled = true
+        btnGetProfileInfo.isEnabled = false
+        btnOpenProfile.isEnabled = true
     }
 
     
-    override func viewWillAppear(animated: Bool) {
+    override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         
         checkForExistingAccessToken()
@@ -45,46 +45,54 @@ class ViewController: UIViewController {
     // MARK: IBAction Functions
 
     @IBAction func getProfileInfo(sender: AnyObject) {
-        if let accessToken = NSUserDefaults.standardUserDefaults().objectForKey("LIAccessToken") {
+        if let accessToken = UserDefaults.standard.object(forKey: "LIAccessToken") {
             // Specify the URL string that we'll get the profile info from.
             let targetURLString = "https://api.linkedin.com/v1/people/~:(public-profile-url)?format=json"
             
             
             // Initialize a mutable URL request object.
-            let request = NSMutableURLRequest(URL: NSURL(string: targetURLString)!)
+            let request = NSMutableURLRequest(url: NSURL(string: targetURLString)! as URL)
             
             // Indicate that this is a GET request.
-            request.HTTPMethod = "GET"
+            request.httpMethod = "GET"
             
             // Add the access token as an HTTP header field.
             request.addValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
             
             
             // Initialize a NSURLSession object.
-            let session = NSURLSession(configuration: NSURLSessionConfiguration.defaultSessionConfiguration())
+            let session = URLSession(configuration: URLSessionConfiguration.default)
             
             // Make the request.
-            let task: NSURLSessionDataTask = session.dataTaskWithRequest(request) { (data, response, error) -> Void in
-                // Get the HTTP status code of the request.
-                let statusCode = (response as! NSHTTPURLResponse).statusCode
-                
-                if statusCode == 200 {
-                    // Convert the received JSON data into a dictionary.
-                    do {
-                        let dataDictionary = try NSJSONSerialization.JSONObjectWithData(data!, options: NSJSONReadingOptions.MutableContainers)
-                        
-                        let profileURLString = dataDictionary["publicProfileUrl"] as! String
-                        
-                        
-                        dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                            self.btnOpenProfile.setTitle(profileURLString, forState: UIControlState.Normal)
-                            self.btnOpenProfile.hidden = false
-                            
-                        })
+            let task: URLSessionDataTask = session.dataTask(with: request as URLRequest) { (data, response, error) -> Void in
+                if let error = error {
+                    print("Received error: \(error)")
+                    return
+                }
+                guard let data = data else {
+                    print("Returned data is nil")
+                    return
+                }
+                // Convert the received JSON data into a dictionary.
+                do {
+                    let dataJson = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
+                    guard let dataDictionary = dataJson as? [String: Any] else {
+                        print("Failed to create [String: Any] from \(dataJson)")
+                        return
                     }
-                    catch {
-                        print("Could not convert JSON data into a dictionary.")
+
+                    guard let profileURLString = dataDictionary["publicProfileUrl"] as? String else {
+                        print("Failed to get access_token from \(dataDictionary)")
+                        return
                     }
+
+                    DispatchQueue.main.async {
+                        self.btnOpenProfile.setTitle(profileURLString, for: .normal)
+                        self.btnOpenProfile.isHidden = false
+                    }
+                }
+                catch {
+                    print("Could not convert JSON data using JSONSerialization")
                 }
             }
             
@@ -94,17 +102,20 @@ class ViewController: UIViewController {
     
     
     @IBAction func openProfileInSafari(sender: AnyObject) {
-        let profileURL = NSURL(string: btnOpenProfile.titleForState(UIControlState.Normal)!)
-        UIApplication.sharedApplication().openURL(profileURL!)
+        guard
+            let profileAddress = btnOpenProfile.title(for: .normal),
+            let profileURL = URL(string: profileAddress)
+        else { return }
+        UIApplication.shared.openURL(profileURL)
     }
  
     
     // MARK: Custom Functions
     
     func checkForExistingAccessToken() {
-        if NSUserDefaults.standardUserDefaults().objectForKey("LIAccessToken") != nil {
-            btnSignIn.enabled = false
-            btnGetProfileInfo.enabled = true
+        if UserDefaults.standard.object(forKey: "LIAccessToken") != nil {
+            btnSignIn.isEnabled = false
+            btnGetProfileInfo.isEnabled = true
         }
     }
     

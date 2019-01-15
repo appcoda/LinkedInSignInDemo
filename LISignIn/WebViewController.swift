@@ -16,7 +16,12 @@ class WebViewController: UIViewController, UIWebViewDelegate {
     
     
     // MARK: Constants
-    
+    let host = "com.appcoda.linkedin.oauth"
+
+    let authRedirectAddress = "https://com.appcoda.linkedin.oauth/oauth"
+
+    let accessTokenRequestRedirectAddress = "https://com.appcoda.linkedin.oauth/oauth"
+
     let linkedInKey = "CLIENT_ID"
     
     let linkedInSecret = "CLIENT_SECRET"
@@ -57,7 +62,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
     
     
     @IBAction func dismiss(sender: AnyObject) {
-        dismissViewControllerAnimated(true, completion: nil)
+        dismiss(animated: true, completion: nil)
     }
  
     
@@ -68,7 +73,7 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         let responseType = "code"
         
         // Set the redirect URL. Adding the percent escape characthers is necessary.
-        let redirectURL = "https://com.appcoda.linkedin.oauth/oauth".stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.alphanumericCharacterSet())!
+        let redirectURL = authRedirectAddress.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         
         // Create a random string based on the time intervale (it will be in the form linkedin12345679).
         let state = "linkedin\(Int(NSDate().timeIntervalSince1970))"
@@ -89,15 +94,15 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         
         
         // Create a URL request and load it in the web view.
-        let request = NSURLRequest(URL: NSURL(string: authorizationURL)!)
-        webView.loadRequest(request)
+        let request = NSURLRequest(url: NSURL(string: authorizationURL)! as URL)
+        webView.loadRequest(request as URLRequest)
     }
     
     
     func requestForAccessToken(authorizationCode: String) {
         let grantType = "authorization_code"
         
-        let redirectURL = "https://com.appcoda.linkedin.oauth/oauth".stringByAddingPercentEncodingWithAllowedCharacters(NSCharacterSet.alphanumericCharacterSet())!
+        let redirectURL = accessTokenRequestRedirectAddress.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
         
         // Set the POST parameters.
         var postParams = "grant_type=\(grantType)&"
@@ -107,47 +112,56 @@ class WebViewController: UIViewController, UIWebViewDelegate {
         postParams += "client_secret=\(linkedInSecret)"
         
         // Convert the POST parameters into a NSData object.
-        let postData = postParams.dataUsingEncoding(NSUTF8StringEncoding)
+        let postData = postParams.data(using: String.Encoding.utf8)
         
         
         // Initialize a mutable URL request object using the access token endpoint URL string.
-        let request = NSMutableURLRequest(URL: NSURL(string: accessTokenEndPoint)!)
+        let request = NSMutableURLRequest(url: NSURL(string: accessTokenEndPoint)! as URL)
         
         // Indicate that we're about to make a POST request.
-        request.HTTPMethod = "POST"
+        request.httpMethod = "POST"
         
         // Set the HTTP body using the postData object created above.
-        request.HTTPBody = postData
+        request.httpBody = postData
         
         // Add the required HTTP header field.
         request.addValue("application/x-www-form-urlencoded;", forHTTPHeaderField: "Content-Type")
         
         
         // Initialize a NSURLSession object.
-        let session = NSURLSession(configuration: NSURLSessionConfiguration.defaultSessionConfiguration())
+        let session = URLSession(configuration: URLSessionConfiguration.default)
         
         // Make the request.
-        let task: NSURLSessionDataTask = session.dataTaskWithRequest(request) { (data, response, error) -> Void in
-            // Get the HTTP status code of the request.
-            let statusCode = (response as! NSHTTPURLResponse).statusCode
-            
-            if statusCode == 200 {
-                // Convert the received JSON data into a dictionary.
-                do {
-                    let dataDictionary = try NSJSONSerialization.JSONObjectWithData(data!, options: NSJSONReadingOptions.MutableContainers)
-                    
-                    let accessToken = dataDictionary["access_token"] as! String
-                    
-                    NSUserDefaults.standardUserDefaults().setObject(accessToken, forKey: "LIAccessToken")
-                    NSUserDefaults.standardUserDefaults().synchronize()
-                    
-                    dispatch_async(dispatch_get_main_queue(), { () -> Void in
-                        self.dismissViewControllerAnimated(true, completion: nil)
-                    })
+        let task: URLSessionDataTask = session.dataTask(with: request as URLRequest) { (data, response, error) -> Void in
+            if let error = error {
+                print("Received error: \(error)")
+                return
+            }
+            guard let data = data else {
+                print("Returned data is nil")
+                return
+            }
+            // Convert the received JSON data into a dictionary.
+            do {
+                let dataJson = try JSONSerialization.jsonObject(with: data, options: JSONSerialization.ReadingOptions.mutableContainers)
+                guard let dataDictionary = dataJson as? [String: Any] else {
+                    print("Failed to create [String: Any] from \(dataJson)")
+                    return
                 }
-                catch {
-                    print("Could not convert JSON data into a dictionary.")
+                guard let accessToken = dataDictionary["access_token"] as? String else {
+                    print("Failed to get access_token from \(dataDictionary)")
+                    return
                 }
+
+                UserDefaults.standard.set(accessToken, forKey: "LIAccessToken")
+                UserDefaults.standard.synchronize()
+
+                DispatchQueue.main.async {
+                    self.dismiss(animated: true, completion: nil)
+                }
+            }
+            catch {
+                print("Could not convert JSON data using JSONSerialization")
             }
         }
         
@@ -157,17 +171,17 @@ class WebViewController: UIViewController, UIWebViewDelegate {
     
     // MARK: UIWebViewDelegate Functions
     
-    func webView(webView: UIWebView, shouldStartLoadWithRequest request: NSURLRequest, navigationType: UIWebViewNavigationType) -> Bool {
-        let url = request.URL!
+    func webView(_ webView: UIWebView, shouldStartLoadWith request: URLRequest, navigationType: UIWebView.NavigationType) -> Bool {
+        let url = request.url!
         print(url)
         
-        if url.host == "com.appcoda.linkedin.oauth" {
-            if url.absoluteString.rangeOfString("code") != nil {
+        if url.host == host {
+            if url.absoluteString.range(of: "code") != nil {
                 // Extract the authorization code.
-                let urlParts = url.absoluteString.componentsSeparatedByString("?")
-                let code = urlParts[1].componentsSeparatedByString("=")[1]
+                let urlParts = url.absoluteString.components(separatedBy: "?")
+                let code = urlParts[1].components(separatedBy: "=")[1]
                 
-                requestForAccessToken(code)
+                requestForAccessToken(authorizationCode: code)
             }
         }
         
